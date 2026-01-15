@@ -855,37 +855,67 @@ def main():
         st.header("⚙️ 설정")
         
         st.subheader("🔑 API 설정")
-        st.write("Gemini API 키를 설정하세요.")
-        api_key = st.text_input(
-            "API Key 입력",
-            type="password",
-            placeholder="sk-... 형태의 키를 입력하세요",
-            help="[Google AI Studio](https://aistudio.google.com/app/apikey)에서 발급받으세요"
-        )
         
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("💾 저장"):
-                if api_key:
-                    os.environ["GEMINI_API_KEY_wj"] = api_key
-                    Config.GEMINI_API_KEY = api_key
-                    st.success("✅ API Key 저장됨")
-                    st.rerun()
-                else:
-                    st.error("API Key를 입력하세요")
+        if Config.GEMINI_API_KEY:
+            # API 키가 이미 설정되어 있으면
+            st.success("✅ Gemini API Key가 설정되어 있습니다!")
+            st.info("💡 **Streamlit Cloud 배포:** Secrets에서 자동으로 로드됩니다.")
+            st.info("💡 **로컬 개발:** 환경변수 `GEMINI_API_KEY_wj`에서 로드됩니다.")
+            
+            with st.expander("🔐 API 키 변경 (클릭)"):
+                st.write("새로운 API 키를 입력하면 현재 키를 덮어씁니다.")
+                new_api_key = st.text_input(
+                    "새 API Key 입력",
+                    type="password",
+                    placeholder="sk-... 형태의 키를 입력하세요",
+                    help="[Google AI Studio](https://aistudio.google.com/app/apikey)에서 발급받으세요"
+                )
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("💾 변경"):
+                        if new_api_key:
+                            os.environ["GEMINI_API_KEY_wj"] = new_api_key
+                            Config.GEMINI_API_KEY = new_api_key
+                            st.success("✅ API Key 변경됨")
+                            st.rerun()
+                        else:
+                            st.error("API Key를 입력하세요")
+        else:
+            # API 키가 설정되지 않았으면
+            st.warning("⚠️ Gemini API Key가 설정되지 않았습니다.")
+            st.write("API 키를 설정하세요.")
+            api_key = st.text_input(
+                "API Key 입력",
+                type="password",
+                placeholder="sk-... 형태의 키를 입력하세요",
+                help="[Google AI Studio](https://aistudio.google.com/app/apikey)에서 발급받으세요"
+            )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("💾 저장"):
+                    if api_key:
+                        os.environ["GEMINI_API_KEY_wj"] = api_key
+                        Config.GEMINI_API_KEY = api_key
+                        st.success("✅ API Key 저장됨")
+                        st.rerun()
+                    else:
+                        st.error("API Key를 입력하세요")
         
-        with col2:
-            if st.button("확인"):
-                if Config.GEMINI_API_KEY:
-                    try:
-                        import google.generativeai as genai
-                        genai.configure(api_key=Config.GEMINI_API_KEY)
-                        model = genai.GenerativeModel(Config.GEMINI_MODEL)
-                        st.success("✅ API Key 유효함")
-                    except Exception as e:
-                        st.error(f"❌ API 오류: {str(e)[:100]}")
-                else:
-                    st.error("❌ API Key가 설정되지 않았습니다")
+        # API 키 확인 버튼 (항상 표시)
+        st.divider()
+        if st.button("🔍 API Key 확인"):
+            if Config.GEMINI_API_KEY:
+                try:
+                    import google.generativeai as genai
+                    genai.configure(api_key=Config.GEMINI_API_KEY)
+                    model = genai.GenerativeModel(Config.GEMINI_MODEL)
+                    st.success("✅ API Key 유효함")
+                except Exception as e:
+                    st.error(f"❌ API 오류: {str(e)[:100]}")
+            else:
+                st.error("❌ API Key가 설정되지 않았습니다")
         
         st.divider()
         st.subheader("📋 무료 API 할당량")
