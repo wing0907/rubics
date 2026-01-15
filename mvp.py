@@ -232,8 +232,8 @@ if "chat_history" not in st.session_state:
 if "current_image" not in st.session_state:
     st.session_state.current_image = None
 
-if "last_question" not in st.session_state:
-    st.session_state.last_question = None
+if "last_processed_question" not in st.session_state:
+    st.session_state.last_processed_question = ""
 
 # ===== 이미지 업로드 =====
 st.subheader("📸 이미지 업로드")
@@ -272,75 +272,64 @@ for msg in st.session_state.chat_history:
 # ===== 입력 영역 =====
 st.divider()
 
-# 텍스트 입력 (질문)
-user_question = st.text_input(
-    "질문을 입력하고 Enter를 누르세요",
-    placeholder="예: 이 문제는 어떻게 풀어?",
-    label_visibility="collapsed",
-    key="user_input"
-)
+# 컨테이너에 입력 필드 배치
+col1, col2 = st.columns([5, 1])
+with col1:
+    user_question = st.text_input(
+        "질문을 입력하세요",
+        placeholder="예: 이 문제는 어떻게 풀어?",
+        label_visibility="collapsed",
+        key="user_input"
+    )
 
-# 질문이 입력되었을 때 처리 (st.rerun 제거)
-if user_question and user_question != st.session_state.last_question:
-    st.session_state.last_question = user_question
-    
-    if st.session_state.current_image:
-        # 사용자 메시지 추가
-        st.session_state.chat_history.append({
-            "role": "user",
-            "content": user_question
-        })
-        
-        # UI 업데이트를 위해 잠시 대기 후 표시
-        st.rerun(scope="fragment")
-    else:
+# 분석 로직 (rerun 없이 순수 세션 상태로 관리)
+if user_question:
+    if not st.session_state.current_image:
         st.warning("⚠️ 먼저 이미지를 업로드하세요.")
-
-# AI 분석 (이전 메시지의 마지막이 user인 경우만 실행)
-if (st.session_state.chat_history and 
-    st.session_state.chat_history[-1]["role"] == "user" and
-    len(st.session_state.chat_history) > 0):
-    
-    last_user_msg = st.session_state.chat_history[-1]["content"]
-    
-    # 이미 답변이 있는지 확인 (중복 방지)
-    has_answer = (len(st.session_state.chat_history) > 1 and 
-                  st.session_state.chat_history[-1]["role"] == "user" and
-                  (len(st.session_state.chat_history) >= 2 and 
-                   st.session_state.chat_history[-2]["role"] == "assistant"))
-    
-    if not has_answer:
-        with st.spinner("🔍 분석 중... (이 과정을 건너뛰지 마세요)"):
-            answer, error = analyze_image_with_gemini(
-                st.session_state.current_image,
-                last_user_msg
-            )
-        
-        if error:
-            st.session_state.chat_history[-1] = {
-                "role": "assistant",
-                "content": f"❌ {error}"
-            }
-        else:
-            # AI 응답 추가
+    else:
+        # 새로운 질문인지 확인
+        if user_question != st.session_state.get("last_processed_question", ""):
+            # 사용자 메시지 추가
             st.session_state.chat_history.append({
-                "role": "assistant",
-                "content": answer
+                "role": "user",
+                "content": user_question
             })
+            st.session_state.last_processed_question = user_question
             
-            # 유사 문제 검색 (선택사항)
-            problems = load_master_answers()
-            if problems:
-                vectorizer, tfidf_matrix = build_problem_index(problems)
-                similar = search_similar_problems(last_user_msg, problems, vectorizer, tfidf_matrix)
+            # AI 분석 시작
+            with st.spinner("🔍 분석 중... (완료를 기다려주세요)"):
+                answer, error = analyze_image_with_gemini(
+                    st.session_state.current_image,
+                    user_question
+                )
+            
+            # 결과 저장
+            if error:
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "content": f"❌ {error}"
+                })
+            else:
+                # AI 응답 추가
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "content": answer
+                })
                 
-                if similar:
-                    st.divider()
-                    st.info("📚 **유사 문제 추천**")
-                    for i, prob in enumerate(similar, 1):
-                        st.write(f"**{i}.** [{prob['domain']}] {prob['answer'][:150]}...")
-        
-        st.rerun(scope="fragment")
+                # 유사 문제 검색
+                try:
+                    problems = load_master_answers()
+                    if problems:
+                        vectorizer, tfidf_matrix = build_problem_index(problems)
+                        similar = search_similar_problems(user_question, problems, vectorizer, tfidf_matrix)
+                        
+                        if similar:
+                            st.divider()
+                            st.info("📚 **유사 문제 추천**")
+                            for i, prob in enumerate(similar, 1):
+                                st.write(f"**{i}.** [{prob['domain']}] {prob['answer'][:150]}...")
+                except:
+                    pass  # 유사 문제 로드 실패 시 무시
 
 # ===== 사이드바: 정보 =====
 with st.sidebar:
@@ -364,8 +353,7 @@ with st.sidebar:
     if st.button("🗑️ 채팅 초기화", use_container_width=True):
         st.session_state.chat_history = []
         st.session_state.current_image = None
-        st.session_state.last_question = None
-        st.rerun(scope="fragment")
+        st.session_state.last_processed_question = ""
 
 # ===== 하단 정보 =====
 st.divider()
