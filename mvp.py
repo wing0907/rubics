@@ -69,6 +69,37 @@ import google.generativeai as genai
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+# ===== 성능 테스트 모드 =====
+TEST_MODE = os.getenv("RUBICS_TEST_MODE", "false").lower() == "true"
+
+def analyze_image_with_mock(image: Image.Image, question: str = ""):
+    """Mock API - 실제 API 호출 없이 테스트"""
+    import time
+    
+    # 응답 시간 시뮬레이션 (0.5~1.5초)
+    time.sleep(0.8)
+    
+    mock_response = f"""📌 **이미지 인식 결과:**
+업로드된 이미지에서 수학/과학 문제를 인식했습니다.
+
+📚 **핵심 개념 설명:**
+질문: "{question}"
+
+이 문제는 다음 개념과 관련이 있습니다:
+- 기본 원리: 해당 주제의 핵심 원리를 이해하기
+- 적용 방법: 단계별로 문제 해결하기
+- 검증: 답이 맞는지 확인하기
+
+💡 **학습 팁:**
+1. 먼저 문제에서 주어진 정보 정리하기
+2. 필요한 공식이나 정리 찾기
+3. 단계별로 풀이하기
+4. 최종 답 검산하기
+
+🔍 **테스트 모드 활성화됨** - Mock API 사용 중"""
+    
+    return mock_response, None
+
 # ===== 설정 =====
 GEMINI_MODEL = "gemini-2.0-flash"
 OUTPUT_DIR = Path(r"D:\Users\장우진\dev26\qube_out_mvp")
@@ -159,6 +190,10 @@ def search_similar_problems(query, problems, vectorizer, tfidf_matrix, top_k=3):
 # ===== Gemini API 호출 =====
 def analyze_image_with_gemini(image: Image.Image, question: str = ""):
     """이미지 분석 및 답변 생성"""
+    # 테스트 모드: 실제 API 호출 없이 Mock 응답 반환
+    if TEST_MODE:
+        return analyze_image_with_mock(image, question)
+    
     if not GEMINI_API_KEY:
         return None, "❌ API Key 설정 필요합니다. Streamlit Cloud의 Secrets에서 설정하세요."
     
@@ -179,7 +214,7 @@ def analyze_image_with_gemini(image: Image.Image, question: str = ""):
     except Exception as e:
         error_msg = str(e)
         if "Quota exceeded" in error_msg:
-            return None, "⚠️ API 할당량 초과. 내일 다시 시도하세요."
+            return None, "⚠️ API 할당량 초과. 내일 다시 시도하세요. 💡 **팁: TEST_MODE=true 환경변수로 테스트 모드 실행 가능**"
         elif "401" in error_msg or "API key" in error_msg:
             return None, "❌ API Key 오류. Streamlit Cloud의 Secrets 설정을 확인하세요."
         return None, f"❌ 오류: {error_msg[:100]}"
@@ -223,6 +258,8 @@ st.markdown("""
 
 # ===== 헤더 =====
 st.title("📚 Rubics")
+if TEST_MODE:
+    st.warning("🧪 **테스트 모드 활성화** - Mock API 사용 중입니다")
 st.markdown("**이미지로 배우는 AI 학습 도우미**")
 
 # ===== 세션 상태 =====
